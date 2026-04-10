@@ -40,6 +40,9 @@ npm run dev
 - 최초 1회 모델 다운로드가 필요해서 시작까지 시간이 걸릴 수 있습니다.
 - 모바일에서 `HTTPS + 최신 Chrome` 조합이 가장 안정적입니다.
 - 기기 성능이 낮으면 처리 지연이 있을 수 있습니다.
+- 모바일 안정 모드에서는 기본 엔진이 `WebSpeech`로 자동 선택될 수 있습니다.
+- Whisper 강제 테스트: URL 뒤에 `?stt=whisper` 추가
+- WebSpeech 강제 테스트: URL 뒤에 `?stt=webspeech` 추가
 
 ## 테스트 문장 예시
 

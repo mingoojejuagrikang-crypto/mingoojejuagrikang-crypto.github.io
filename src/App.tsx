@@ -105,6 +105,15 @@ export default function App() {
     setSttSupported(sttServiceRef.current?.isSupported() ?? false)
   }, [setSttSupported])
 
+  useEffect(() => {
+    if (sttEngineRef.current === 'web-speech') {
+      const forcedEngine = new URLSearchParams(window.location.search).get('stt')
+      if (forcedEngine !== 'webspeech') {
+        setSttInfo('안정 모드: WebSpeech 사용 중 (Whisper 강제: ?stt=whisper)')
+      }
+    }
+  }, [])
+
   const recentEvents = useMemo<SurveyEvent[]>(() => {
     const successEvents = records.map<SurveyEvent>((record) => ({
       id: record.id,
