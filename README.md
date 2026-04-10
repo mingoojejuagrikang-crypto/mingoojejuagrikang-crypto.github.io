@@ -31,8 +31,9 @@ npm run dev
   - TTS 재생 중 STT 입력 무시
   - 최근 1초 동일 문구 중복 처리 차단
 - STT 엔진 자동 선택
-  - 1순위: Whisper(Web, `onnx-community/whisper-tiny`)
+  - 1순위: Whisper(Web, `onnx-community/whisper-base`)
   - 폴백: Web Speech API
+  - 세션 중단 시 자동 복구(종료 버튼 전까지 listening 유지)
 
 ## Whisper 사용 주의
 

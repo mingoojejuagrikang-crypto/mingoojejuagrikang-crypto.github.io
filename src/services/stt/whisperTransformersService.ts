@@ -20,6 +20,7 @@ type TransformersModule = {
 
 const TARGET_SAMPLE_RATE = 16000
 const CHUNK_MS = 3200
+const RECORDER_RECOVER_DELAY_MS = 300
 
 function isWhisperWebSupported(): boolean {
   return Boolean(
@@ -83,8 +84,9 @@ export class WhisperTransformersService implements SpeechToTextService {
   private transcriber: WhisperPipeline | null = null
   private loadingPromise: Promise<WhisperPipeline> | null = null
   private queue: Promise<void> = Promise.resolve()
+  private recovering = false
 
-  constructor(modelId = 'onnx-community/whisper-tiny') {
+  constructor(modelId = 'onnx-community/whisper-base') {
     this.modelId = modelId
   }
 
@@ -101,14 +103,20 @@ export class WhisperTransformersService implements SpeechToTextService {
     }
 
     this.handlers = handlers
+    if (this.shouldRun && this.mediaRecorder?.state === 'recording') {
+      handlers.onStateChange?.('listening')
+      return true
+    }
     this.shouldRun = true
+    this.recovering = false
     void this.warmUpModel()
-    void this.startRecording()
+    void this.startOrRecoverRecording()
     return true
   }
 
   stop(): void {
     this.shouldRun = false
+    this.recovering = false
     this.mediaRecorder?.stop()
     this.mediaRecorder = null
     if (this.stream) {
@@ -117,19 +125,23 @@ export class WhisperTransformersService implements SpeechToTextService {
       }
     }
     this.stream = null
+    this.audioContext?.close().catch(() => undefined)
+    this.audioContext = null
     this.handlers?.onStateChange?.('stopped')
   }
 
-  private async startRecording(): Promise<void> {
+  private async startOrRecoverRecording(): Promise<void> {
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          noiseSuppression: true,
-          echoCancellation: true,
-          autoGainControl: true,
-          channelCount: 1,
-        },
-      })
+      if (!this.stream || this.stream.getTracks().every((track) => track.readyState === 'ended')) {
+        this.stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            noiseSuppression: true,
+            echoCancellation: true,
+            autoGainControl: true,
+            channelCount: 1,
+          },
+        })
+      }
     } catch (error) {
       this.shouldRun = false
       this.handlers?.onStateChange?.('stopped')
@@ -140,11 +152,12 @@ export class WhisperTransformersService implements SpeechToTextService {
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
       ? 'audio/webm;codecs=opus'
       : undefined
-    this.mediaRecorder = mimeType
+    const recorder = mimeType
       ? new MediaRecorder(this.stream, { mimeType })
       : new MediaRecorder(this.stream)
+    this.mediaRecorder = recorder
 
-    this.mediaRecorder.ondataavailable = (event) => {
+    recorder.ondataavailable = (event) => {
       if (!this.shouldRun || event.data.size === 0) return
       this.queue = this.queue
         .then(() => this.transcribeChunk(event.data))
@@ -153,19 +166,34 @@ export class WhisperTransformersService implements SpeechToTextService {
         })
     }
 
-    this.mediaRecorder.onerror = (event: Event) => {
+    recorder.onerror = (event: Event) => {
       this.handlers?.onError?.(`녹음기 오류: ${String(event)}`)
+      if (this.shouldRun) {
+        this.recoverRecorder()
+      }
     }
 
-    this.mediaRecorder.onstop = () => {
+    recorder.onstop = () => {
       if (!this.shouldRun) {
+        this.handlers?.onStateChange?.('stopped')
         return
       }
-      this.handlers?.onStateChange?.('stopped')
+      this.recoverRecorder()
     }
 
-    this.mediaRecorder.start(CHUNK_MS)
+    recorder.start(CHUNK_MS)
     this.handlers?.onStateChange?.('listening')
+  }
+
+  private recoverRecorder(): void {
+    if (!this.shouldRun || this.recovering) return
+    this.recovering = true
+    this.handlers?.onInfo?.('STT 세션이 중단되어 자동 복구 중입니다.')
+    setTimeout(() => {
+      this.recovering = false
+      if (!this.shouldRun) return
+      void this.startOrRecoverRecording()
+    }, RECORDER_RECOVER_DELAY_MS)
   }
 
   private async warmUpModel(): Promise<WhisperPipeline> {
