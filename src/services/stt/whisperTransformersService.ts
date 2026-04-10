@@ -15,6 +15,14 @@ type TransformersModule = {
   ) => Promise<WhisperPipeline>
   env: {
     allowLocalModels: boolean
+    backends?: {
+      onnx?: {
+        wasm?: {
+          numThreads?: number
+          proxy?: boolean
+        }
+      }
+    }
   }
 }
 
@@ -75,7 +83,8 @@ function resampleLinear(
 
 export class WhisperTransformersService implements SpeechToTextService {
   readonly engine = 'whisper-web' as const
-  private readonly modelId: string
+  private readonly modelCandidates: string[]
+  private modelIndex = 0
   private handlers: STTHandlers | null = null
   private shouldRun = false
   private stream: MediaStream | null = null
@@ -86,8 +95,8 @@ export class WhisperTransformersService implements SpeechToTextService {
   private queue: Promise<void> = Promise.resolve()
   private recovering = false
 
-  constructor(modelId = 'onnx-community/whisper-base') {
-    this.modelId = modelId
+  constructor(modelCandidates = ['onnx-community/whisper-base', 'onnx-community/whisper-tiny']) {
+    this.modelCandidates = modelCandidates
   }
 
   isSupported(): boolean {
@@ -127,6 +136,7 @@ export class WhisperTransformersService implements SpeechToTextService {
     this.stream = null
     this.audioContext?.close().catch(() => undefined)
     this.audioContext = null
+    this.modelIndex = 0
     this.handlers?.onStateChange?.('stopped')
   }
 
@@ -200,13 +210,21 @@ export class WhisperTransformersService implements SpeechToTextService {
     if (this.transcriber) return this.transcriber
     if (this.loadingPromise) return this.loadingPromise
 
-    this.handlers?.onInfo?.('Whisper 모델 로딩 중입니다. 최초 1회는 시간이 걸릴 수 있습니다.')
+    const activeModel = this.modelCandidates[this.modelIndex]
+    this.handlers?.onInfo?.(
+      `Whisper 모델 로딩 중: ${activeModel} (최초 1회는 시간이 걸릴 수 있습니다.)`,
+    )
 
     this.loadingPromise = (async () => {
       const module = (await import(
         '@huggingface/transformers'
       )) as unknown as TransformersModule
       module.env.allowLocalModels = false
+      if (module.env.backends?.onnx?.wasm) {
+        // 모바일 안정성을 위해 단일 스레드/비프록시 모드 사용
+        module.env.backends.onnx.wasm.numThreads = 1
+        module.env.backends.onnx.wasm.proxy = false
+      }
 
       const options: Record<string, unknown> = {
         progress_callback: () => undefined,
@@ -217,17 +235,30 @@ export class WhisperTransformersService implements SpeechToTextService {
 
       const pipeline = await module.pipeline(
         'automatic-speech-recognition',
-        this.modelId,
+        activeModel,
         options,
       )
 
       this.transcriber = pipeline
-      this.handlers?.onInfo?.('Whisper 모델 로딩이 완료되었습니다.')
+      this.handlers?.onInfo?.(`Whisper 모델 로딩 완료: ${activeModel}`)
       return pipeline
     })()
 
     try {
       return await this.loadingPromise
+    } catch (error) {
+      const hasFallback = this.modelIndex < this.modelCandidates.length - 1
+      if (hasFallback) {
+        const failed = this.modelCandidates[this.modelIndex]
+        this.modelIndex += 1
+        this.transcriber = null
+        this.handlers?.onError?.(
+          `Whisper 모델 로딩 실패(${failed}). 경량 모델로 자동 전환합니다.`,
+        )
+        return this.warmUpModel()
+      }
+      this.handlers?.onError?.(`Whisper 모델 로딩 실패: ${String(error)}`)
+      throw error
     } finally {
       this.loadingPromise = null
     }
