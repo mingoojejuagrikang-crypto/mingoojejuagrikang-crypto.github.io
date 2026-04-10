@@ -1,30 +1,47 @@
-import type { SpeechToTextService } from './types'
+import type { SpeechToTextService, STTEnginePreference } from './types'
 import { WebSpeechRecognitionService } from './webSpeechRecognitionService'
 import { WhisperTransformersService } from './whisperTransformersService'
 
-function isMobileRiskDevice(): boolean {
-  const nav = navigator as Navigator & { deviceMemory?: number }
+const STT_ENGINE_STORAGE_KEY = 'citrus-survey-stt-engine-v1'
+
+function isMobileDevice(): boolean {
   const ua = navigator.userAgent.toLowerCase()
-  const isMobileUa =
-    /android|iphone|ipad|ipod|mobile/.test(ua) || navigator.maxTouchPoints > 1
-  const deviceMemory = nav.deviceMemory ?? 4
-  const cores = navigator.hardwareConcurrency ?? 4
-  return isMobileUa && (deviceMemory <= 6 || cores <= 8)
+  return /android|iphone|ipad|ipod|mobile/.test(ua) || navigator.maxTouchPoints > 1
 }
 
-export function createSpeechToTextService(): SpeechToTextService {
+function parseEnginePreference(raw: string | null): STTEnginePreference | null {
+  if (raw === 'webspeech' || raw === 'whisper') return raw
+  return null
+}
+
+export function getSttEnginePreference(): STTEnginePreference {
   const query = new URLSearchParams(window.location.search)
-  const forcedEngine = query.get('stt')
-  if (forcedEngine === 'webspeech') {
+  const fromQuery = parseEnginePreference(query.get('stt'))
+  if (fromQuery) return fromQuery
+
+  const fromStorage = parseEnginePreference(window.localStorage.getItem(STT_ENGINE_STORAGE_KEY))
+  if (fromStorage) return fromStorage
+
+  // 모바일 단독 사용 안정성을 위해 기본값은 WebSpeech.
+  if (isMobileDevice()) {
+    return 'webspeech'
+  }
+
+  return 'whisper'
+}
+
+export function setSttEnginePreference(preference: STTEnginePreference): void {
+  window.localStorage.setItem(STT_ENGINE_STORAGE_KEY, preference)
+}
+
+export function createSpeechToTextService(
+  preference: STTEnginePreference = getSttEnginePreference(),
+): SpeechToTextService {
+  if (preference === 'webspeech') {
     return new WebSpeechRecognitionService('ko-KR')
   }
 
-  const mobileRisk = isMobileRiskDevice()
-  if (mobileRisk && forcedEngine !== 'whisper') {
-    return new WebSpeechRecognitionService('ko-KR')
-  }
-
-  const whisperModelCandidates = mobileRisk
+  const whisperModelCandidates = isMobileDevice()
     ? ['onnx-community/whisper-tiny']
     : ['onnx-community/whisper-base', 'onnx-community/whisper-tiny']
   const whisper = new WhisperTransformersService(whisperModelCandidates)

@@ -7,8 +7,16 @@ import { fieldToContextKey } from './data/fieldSchemas'
 import { sampleUtterances } from './data/testSamples'
 import { parseSurveyInput } from './parser/parseSurveyInput'
 import { exportLogsToCsv } from './services/export/csvExportService'
-import { createSpeechToTextService } from './services/stt/createSpeechToTextService'
-import type { SpeechToTextService, STTEngine } from './services/stt/types'
+import {
+  createSpeechToTextService,
+  getSttEnginePreference,
+  setSttEnginePreference,
+} from './services/stt/createSpeechToTextService'
+import type {
+  SpeechToTextService,
+  STTEngine,
+  STTEnginePreference,
+} from './services/stt/types'
 import { WebSpeechSynthesisService } from './services/tts/webSpeechSynthesisService'
 import { useSurveyStore } from './store/useSurveyStore'
 import type {
@@ -67,24 +75,18 @@ export default function App() {
     clearAllLogs,
   } = useSurveyStore()
 
+  const [sttPreference, setSttPreference] = useState<STTEnginePreference>(
+    () => getSttEnginePreference(),
+  )
+  const [sttEngine, setSttEngine] = useState<STTEngine>('web-speech')
   const sttServiceRef = useRef<SpeechToTextService | null>(null)
-  const sttEngineRef = useRef<STTEngine>('web-speech')
-  const ttsServiceRef = useRef<WebSpeechSynthesisService | null>(null)
+  const ttsServiceRef = useRef<WebSpeechSynthesisService>(new WebSpeechSynthesisService())
   const recentTranscriptRef = useRef<Map<string, number>>(new Map())
   const ttsSpeakingRef = useRef(false)
-  const secureContextRef = useRef(window.isSecureContext)
-  const standaloneRef = useRef(
-    window.matchMedia?.('(display-mode: standalone)').matches ?? false,
-  )
+  const secureContext = window.isSecureContext
+  const standaloneMode =
+    window.matchMedia?.('(display-mode: standalone)').matches ?? false
   const [sttInfo, setSttInfo] = useState('')
-
-  if (!sttServiceRef.current) {
-    sttServiceRef.current = createSpeechToTextService()
-    sttEngineRef.current = sttServiceRef.current.engine
-  }
-  if (!ttsServiceRef.current) {
-    ttsServiceRef.current = new WebSpeechSynthesisService()
-  }
 
   useEffect(() => {
     ttsSpeakingRef.current = ttsSpeaking
@@ -102,17 +104,20 @@ export default function App() {
   }, [setOnline])
 
   useEffect(() => {
-    setSttSupported(sttServiceRef.current?.isSupported() ?? false)
-  }, [setSttSupported])
+    sttServiceRef.current?.stop()
+    const nextService = createSpeechToTextService(sttPreference)
+    sttServiceRef.current = nextService
+    setSttEngine(nextService.engine)
+    setSttEnginePreference(sttPreference)
+    setMicActive(false)
+    setSttSupported(nextService.isSupported())
 
-  useEffect(() => {
-    if (sttEngineRef.current === 'web-speech') {
-      const forcedEngine = new URLSearchParams(window.location.search).get('stt')
-      if (forcedEngine !== 'webspeech') {
-        setSttInfo('안정 모드: WebSpeech 사용 중 (Whisper 강제: ?stt=whisper)')
-      }
+    if (sttPreference === 'webspeech') {
+      setSttInfo('안정 모드: WebSpeech 사용 중')
+    } else {
+      setSttInfo('Whisper 모드: 모델 로딩 후 인식 시작')
     }
-  }, [])
+  }, [setMicActive, setSttSupported, sttPreference])
 
   const recentEvents = useMemo<SurveyEvent[]>(() => {
     const successEvents = records.map<SurveyEvent>((record) => ({
@@ -139,7 +144,7 @@ export default function App() {
 
   const speak = async (text: string): Promise<void> => {
     if (!ttsEnabled) return
-    await ttsServiceRef.current?.speak(text, {
+    await ttsServiceRef.current.speak(text, {
       dedupeMs: DUPLICATE_BLOCK_MS,
       onStart: () => setTtsSpeaking(true),
       onEnd: () => setTtsSpeaking(false),
@@ -204,12 +209,13 @@ export default function App() {
   }
 
   const startMic = (): void => {
-    if (!sttServiceRef.current?.isSupported()) {
+    const sttService = sttServiceRef.current
+    if (!sttService || !sttService.isSupported()) {
       setSttSupported(false)
       return
     }
 
-    const started = sttServiceRef.current.start({
+    const started = sttService.start({
       onResult: onTranscript,
       onError: onSttError,
       onInfo: (message) => setSttInfo(message),
@@ -241,9 +247,18 @@ export default function App() {
     const next = !ttsEnabled
     setTtsEnabled(next)
     if (!next) {
-      ttsServiceRef.current?.stop()
+      ttsServiceRef.current.stop()
       setTtsSpeaking(false)
     }
+  }
+
+  const onChangeSttPreference = (next: STTEnginePreference): void => {
+    if (next === sttPreference) return
+    if (micActive) {
+      sttServiceRef.current?.stop()
+      setMicActive(false)
+    }
+    setSttPreference(next)
   }
 
   return (
@@ -252,10 +267,10 @@ export default function App() {
         online={online}
         micActive={micActive}
         sttSupported={sttSupported}
-        sttEngine={sttEngineRef.current}
+        sttEngine={sttEngine}
         sttInfo={sttInfo}
-        secureContext={secureContextRef.current}
-        standaloneMode={standaloneRef.current}
+        secureContext={secureContext}
+        standaloneMode={standaloneMode}
       />
       <LiveResultPanel
         rawText={latestRawText}
@@ -266,7 +281,9 @@ export default function App() {
       <ControlBar
         micActive={micActive}
         ttsEnabled={ttsEnabled}
+        sttPreference={sttPreference}
         onToggleMic={onToggleMic}
+        onChangeSttPreference={onChangeSttPreference}
         onToggleTts={onToggleTts}
         onClearLogs={clearAllLogs}
         onExportCsv={() => exportLogsToCsv(records, failures)}

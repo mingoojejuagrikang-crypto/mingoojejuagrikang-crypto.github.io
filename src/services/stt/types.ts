@@ -1,4 +1,5 @@
 export type STTState = 'idle' | 'listening' | 'stopped'
+export type STTEnginePreference = 'webspeech' | 'whisper'
 
 export type STTHandlers = {
   onResult: (transcript: string) => void

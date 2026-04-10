@@ -30,9 +30,9 @@ npm run dev
 - TTS/STT 충돌 방지
   - TTS 재생 중 STT 입력 무시
   - 최근 1초 동일 문구 중복 처리 차단
-- STT 엔진 자동 선택
-  - 1순위: Whisper(Web, `onnx-community/whisper-base`)
-  - 폴백: Web Speech API
+- STT 엔진 선택
+  - 기본: WebSpeech(모바일 단독 안정 모드)
+  - 선택: Whisper(Web, 데스크톱 `whisper-base`, 모바일 `whisper-tiny`)
   - 세션 중단 시 자동 복구(종료 버튼 전까지 listening 유지)
 
 ## Whisper 사용 주의
@@ -40,7 +40,8 @@ npm run dev
 - 최초 1회 모델 다운로드가 필요해서 시작까지 시간이 걸릴 수 있습니다.
 - 모바일에서 `HTTPS + 최신 Chrome` 조합이 가장 안정적입니다.
 - 기기 성능이 낮으면 처리 지연이 있을 수 있습니다.
-- 모바일 안정 모드에서는 기본 엔진이 `WebSpeech`로 자동 선택될 수 있습니다.
+- 모바일은 기본 엔진이 `WebSpeech`로 시작됩니다.
+- 화면에서 엔진을 직접 변경할 수 있습니다.
 - Whisper 강제 테스트: URL 뒤에 `?stt=whisper` 추가
 - WebSpeech 강제 테스트: URL 뒤에 `?stt=webspeech` 추가
 

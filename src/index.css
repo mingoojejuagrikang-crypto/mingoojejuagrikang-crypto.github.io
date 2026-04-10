@@ -198,17 +198,30 @@ th {
 
 .control-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-button {
+button,
+select {
   border-radius: 10px;
   border: 1px solid var(--line);
   padding: 10px 12px;
   background: #ffffff;
   color: var(--text);
   font-weight: 600;
+}
+
+.engine-row {
+  display: grid;
+  grid-template-columns: 86px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.engine-row span {
+  color: var(--subtext);
+  font-size: 0.88rem;
 }
 
 .samples {
