@@ -56,10 +56,10 @@ npm run dev
 
 권장 절차:
 
-1. `npm run build`
-2. `dist/`를 정적 호스팅(Vercel/Netlify/Cloudflare Pages)에 배포
-3. 배포된 `https://...` 주소를 폰에서 열어 홈 화면에 추가
-4. 설치 앱(standalone)에서 마이크 권한 승인 후 사용
+1. `npm run sync:pages`
+2. `git add -A && git commit -m "deploy update" && git push`
+3. `https://mingoojejuagrikang-crypto.github.io/`에서 반영 확인
+4. 폰에서 홈 화면에 추가 후 설치 앱으로 실행
 
 ## 주요 코드 위치
 
