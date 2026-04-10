@@ -2,6 +2,8 @@ type Props = {
   online: boolean
   micActive: boolean
   sttSupported: boolean
+  sttEngine: 'whisper-web' | 'web-speech'
+  sttInfo: string
   secureContext: boolean
   standaloneMode: boolean
 }
@@ -10,6 +12,8 @@ export function StatusHeader({
   online,
   micActive,
   sttSupported,
+  sttEngine,
+  sttInfo,
   secureContext,
   standaloneMode,
 }: Props) {
@@ -29,6 +33,7 @@ export function StatusHeader({
         <span className={`badge ${sttSupported ? 'ok' : 'warn'}`}>
           STT: {sttSupported ? '지원됨' : '미지원'}
         </span>
+        <span className="badge">엔진: {sttEngine === 'whisper-web' ? 'Whisper' : 'WebSpeech'}</span>
         <span className={`badge ${secureContext ? 'ok' : 'warn'}`}>
           보안: {secureContext ? 'HTTPS' : '비보안'}
         </span>
@@ -36,6 +41,7 @@ export function StatusHeader({
           앱모드: {standaloneMode ? '설치 실행' : '브라우저'}
         </span>
       </div>
+      {sttInfo && <p className="subtitle">{sttInfo}</p>}
     </header>
   )
 }

@@ -6,7 +6,7 @@
 
 ```bash
 npm install
-npm install zustand vite-plugin-pwa --legacy-peer-deps
+npm install zustand vite-plugin-pwa @huggingface/transformers --legacy-peer-deps
 ```
 
 ## 실행
@@ -30,6 +30,15 @@ npm run dev
 - TTS/STT 충돌 방지
   - TTS 재생 중 STT 입력 무시
   - 최근 1초 동일 문구 중복 처리 차단
+- STT 엔진 자동 선택
+  - 1순위: Whisper(Web, `onnx-community/whisper-tiny`)
+  - 폴백: Web Speech API
+
+## Whisper 사용 주의
+
+- 최초 1회 모델 다운로드가 필요해서 시작까지 시간이 걸릴 수 있습니다.
+- 모바일에서 `HTTPS + 최신 Chrome` 조합이 가장 안정적입니다.
+- 기기 성능이 낮으면 처리 지연이 있을 수 있습니다.
 
 ## 테스트 문장 예시
 

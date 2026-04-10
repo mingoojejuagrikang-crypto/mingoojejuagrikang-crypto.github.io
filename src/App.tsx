@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ControlBar } from './components/ControlBar'
 import { EventTable } from './components/EventTable'
 import { LiveResultPanel } from './components/LiveResultPanel'
@@ -7,7 +7,8 @@ import { fieldToContextKey } from './data/fieldSchemas'
 import { sampleUtterances } from './data/testSamples'
 import { parseSurveyInput } from './parser/parseSurveyInput'
 import { exportLogsToCsv } from './services/export/csvExportService'
-import { WebSpeechRecognitionService } from './services/stt/webSpeechRecognitionService'
+import { createSpeechToTextService } from './services/stt/createSpeechToTextService'
+import type { SpeechToTextService, STTEngine } from './services/stt/types'
 import { WebSpeechSynthesisService } from './services/tts/webSpeechSynthesisService'
 import { useSurveyStore } from './store/useSurveyStore'
 import type {
@@ -66,7 +67,8 @@ export default function App() {
     clearAllLogs,
   } = useSurveyStore()
 
-  const sttServiceRef = useRef<WebSpeechRecognitionService | null>(null)
+  const sttServiceRef = useRef<SpeechToTextService | null>(null)
+  const sttEngineRef = useRef<STTEngine>('web-speech')
   const ttsServiceRef = useRef<WebSpeechSynthesisService | null>(null)
   const recentTranscriptRef = useRef<Map<string, number>>(new Map())
   const ttsSpeakingRef = useRef(false)
@@ -74,9 +76,11 @@ export default function App() {
   const standaloneRef = useRef(
     window.matchMedia?.('(display-mode: standalone)').matches ?? false,
   )
+  const [sttInfo, setSttInfo] = useState('')
 
   if (!sttServiceRef.current) {
-    sttServiceRef.current = new WebSpeechRecognitionService('ko-KR')
+    sttServiceRef.current = createSpeechToTextService()
+    sttEngineRef.current = sttServiceRef.current.engine
   }
   if (!ttsServiceRef.current) {
     ttsServiceRef.current = new WebSpeechSynthesisService()
@@ -149,12 +153,8 @@ export default function App() {
   }
 
   const onTranscript = (rawText: string): void => {
-    if (ttsSpeakingRef.current) {
-      return
-    }
-    if (isBlockedByRecentDuplicate(rawText)) {
-      return
-    }
+    if (ttsSpeakingRef.current) return
+    if (isBlockedByRecentDuplicate(rawText)) return
 
     const parseResult = parseSurveyInput(rawText)
     setLatestParse(rawText, parseResult)
@@ -203,6 +203,7 @@ export default function App() {
     const started = sttServiceRef.current.start({
       onResult: onTranscript,
       onError: onSttError,
+      onInfo: (message) => setSttInfo(message),
       onStateChange: (state) => setMicActive(state === 'listening'),
     })
     if (!started) {
@@ -236,16 +237,14 @@ export default function App() {
     }
   }
 
-  const onExportCsv = (): void => {
-    exportLogsToCsv(records, failures)
-  }
-
   return (
     <main className="app-shell">
       <StatusHeader
         online={online}
         micActive={micActive}
         sttSupported={sttSupported}
+        sttEngine={sttEngineRef.current}
+        sttInfo={sttInfo}
         secureContext={secureContextRef.current}
         standaloneMode={standaloneRef.current}
       />
@@ -261,7 +260,7 @@ export default function App() {
         onToggleMic={onToggleMic}
         onToggleTts={onToggleTts}
         onClearLogs={clearAllLogs}
-        onExportCsv={onExportCsv}
+        onExportCsv={() => exportLogsToCsv(records, failures)}
       />
       <section className="card panel">
         <h2>테스트용 음성 문장 예시</h2>

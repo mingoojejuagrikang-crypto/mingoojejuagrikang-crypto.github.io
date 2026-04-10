@@ -1,10 +1,4 @@
-export type STTState = 'idle' | 'listening' | 'stopped'
-
-export type STTHandlers = {
-  onResult: (transcript: string) => void
-  onError?: (errorMessage: string) => void
-  onStateChange?: (state: STTState) => void
-}
+import type { SpeechToTextService, STTHandlers } from './types'
 
 type RecognitionLike = {
   lang: string
@@ -24,7 +18,8 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: new () => RecognitionLike
 }
 
-export class WebSpeechRecognitionService {
+export class WebSpeechRecognitionService implements SpeechToTextService {
+  readonly engine = 'web-speech' as const
   private recognition: RecognitionLike | null = null
   private shouldRun = false
   private handlers: STTHandlers | null = null
