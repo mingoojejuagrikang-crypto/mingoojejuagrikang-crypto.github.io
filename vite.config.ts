@@ -13,6 +13,7 @@ export default defineConfig({
         clientsClaim: true,
         skipWaiting: true,
         navigateFallback: '/index.html',
+        globIgnores: ['**/*.wasm'],
       },
       manifest: {
         name: '감귤 생육조사 PWA v1',

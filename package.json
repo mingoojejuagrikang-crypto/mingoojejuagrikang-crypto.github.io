@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "sync:pages": "npm run build && cp -R dist/* . && touch .nojekyll",
+    "sync:pages": "npm run build && rm -rf docs && mkdir -p docs && cp -R dist/* docs/ && touch docs/.nojekyll",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -70,6 +70,9 @@ npm run dev
 3. `https://mingoojejuagrikang-crypto.github.io/`에서 반영 확인
 4. 폰에서 홈 화면에 추가 후 설치 앱으로 실행
 
+참고:
+- Pages 배포 산출물은 `docs/` 폴더에 생성됩니다.
+
 ## 주요 코드 위치
 
 - 앱 진입: `src/App.tsx`
